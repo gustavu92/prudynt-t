@@ -1,5 +1,9 @@
 #include "JPEGWorker.hpp"
 
+extern "C" {
+#include "JPEG.Encryption.Core.h"
+}
+
 #include "Config.hpp"
 #include "Logger.hpp"
 #include "WorkerUtils.hpp"
