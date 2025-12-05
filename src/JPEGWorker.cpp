@@ -77,7 +77,7 @@ int JPEGWorker::save_jpeg_stream(int fd, IMPEncoderStream *stream)
     unsigned char *buffer_out = nullptr;
     uint32_t size_out = 0;
 
-    const char *password = "minha_senha_segura";
+    const char *password = "mypassword";
     char crypto_mode = 'e';
     int crypto_detail = 15;
 
