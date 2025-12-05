@@ -12,6 +12,8 @@
  * detailed description of file.
  */
 
+#include <stdint.h>
+
 #ifndef JPEG_ENCRYPTION_CORE_H_
 #define JPEG_ENCRYPTION_CORE_H_
 
@@ -82,16 +84,17 @@ short unsigned int get16BitValue(StructJPEGFileInMemory * jpegByteStream, int* o
 unsigned char get8BitValue(StructJPEGFileInMemory * jpegByteStream, int* offset);
 void parseFrameHeader(StructJPEGFileInMemory* jpegByteStream, int* offset, structFrameHeaderParameters* par);
 void parseHuffmanTabel(StructJPEGFileInMemory* jpegByteStream, int* offset,structTotalHuffmanTables* huffTables);
+
 int jpeg_process_buffer(
-    const unsigned char *in_buf,
-    unsigned int in_size,
-    unsigned char **out_buf,
-    unsigned int *out_size,
+    const unsigned char *bufferIn,
+    uint32_t sizeIn,
+    unsigned char **bufferOut,
+    uint32_t *sizeOut,
     const char *password,
-    char crypto_mode,
-    int crypto_detail,
-    int *roi_array,
-    int roi_array_size
+    char cryptoModeChar,
+    int cryptoDetail,
+    const int *roiArray,
+    int roiArraySize
 );
 
 #endif /* JPEG_ENCRYPTION_CORE_H_ */
