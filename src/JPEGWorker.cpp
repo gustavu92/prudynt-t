@@ -27,56 +27,82 @@ JPEGWorker::~JPEGWorker()
     LOG_DEBUG("JPEGWorker destroyed for JPEG channel index " << jpgChn);
 }
 
+extern "C" {
+#include "JPEG.Encryption.Core.h"
+}
+
 int JPEGWorker::save_jpeg_stream(int fd, IMPEncoderStream *stream)
 {
-    int ret, i, nr_pack = stream->packCount;
+    int nr_pack = stream->packCount;
 
-    for (i = 0; i < nr_pack; i++)
+    size_t total_size = 0;
+    for (int i = 0; i < nr_pack; i++)
+        total_size += stream->pack[i].length;
+
+    unsigned char *jpeg_buffer = (unsigned char *)malloc(total_size);
+    if (!jpeg_buffer) return -1;
+
+    size_t offset = 0;
+    for (int i = 0; i < nr_pack; i++)
     {
-        void *data_ptr;
-        size_t data_len;
-
 #if defined(PLATFORM_T31) || defined(PLATFORM_T40) || defined(PLATFORM_T41) || defined(PLATFORM_C100)
         IMPEncoderPack *pack = &stream->pack[i];
-        uint32_t remSize = 0; // Declare remSize here
-        if (pack->length)
-        {
-            remSize = stream->streamSize - pack->offset;
-            data_ptr = (void *) ((char *) stream->virAddr
-                                 + ((remSize < pack->length) ? 0 : pack->offset));
-            data_len = (remSize < pack->length) ? remSize : pack->length;
-        }
-        else
-        {
-            continue; // Skip empty packs
-        }
-#elif defined(PLATFORM_T10) || defined(PLATFORM_T20) || defined(PLATFORM_T21) \
-    || defined(PLATFORM_T23) || defined(PLATFORM_T30)
-        data_ptr = reinterpret_cast<void *>(stream->pack[i].virAddr);
-        data_len = stream->pack[i].length;
-#endif
+        if (!pack->length) continue;
 
-        // Write data to file
-        ret = write(fd, data_ptr, data_len);
-        if (ret != static_cast<int>(data_len))
-        {
-            printf("Stream write error: %s\n", strerror(errno));
-            return -1; // Return error on write failure
-        }
+        uint32_t remSize = stream->streamSize - pack->offset;
+        void *data_ptr = (void *) ((char *) stream->virAddr +
+                        ((remSize < pack->length) ? 0 : pack->offset));
+        size_t data_len = (remSize < pack->length) ? remSize : pack->length;
 
-#if defined(PLATFORM_T31) || defined(PLATFORM_T40) || defined(PLATFORM_T41) || defined(PLATFORM_C100)
-        // Check the condition only under T31 platform, as remSize is used here
+        memcpy(jpeg_buffer + offset, data_ptr, data_len);
+        offset += data_len;
+
         if (remSize && pack->length > remSize)
         {
-            ret = write(fd, (void *) ((char *) stream->virAddr), pack->length - remSize);
-            if (ret != static_cast<int>(pack->length - remSize))
-            {
-                printf("Stream write error (remaining part): %s\n", strerror(errno));
-                return -1;
-            }
+            void *ptr2 = (void *) ((char *) stream->virAddr);
+            size_t len2 = pack->length - remSize;
+            memcpy(jpeg_buffer + offset, ptr2, len2);
+            offset += len2;
         }
+
+#elif defined(PLATFORM_T10) || defined(PLATFORM_T20) || defined(PLATFORM_T21) \
+   || defined(PLATFORM_T23) || defined(PLATFORM_T30)
+        void *data_ptr = reinterpret_cast<void *>(stream->pack[i].virAddr);
+        size_t data_len = stream->pack[i].length;
+        memcpy(jpeg_buffer + offset, data_ptr, data_len);
+        offset += data_len;
 #endif
     }
+
+    unsigned char *buffer_out = nullptr;
+    uint32_t size_out = 0;
+
+    const char *password = "minha_senha_segura";
+    char crypto_mode = 'e';
+    int crypto_detail = 15;
+
+    int ret_crypto = jpeg_process_buffer(
+        jpeg_buffer,
+        static_cast<uint32_t>(total_size),
+        &buffer_out,
+        &size_out,
+        password,
+        crypto_mode,
+        crypto_detail,
+        nullptr,
+        0
+    );
+
+    free(jpeg_buffer);
+
+    if (ret_crypto != 0 || !buffer_out)
+        return -1;
+
+    int ret = write(fd, buffer_out, size_out);
+    free(buffer_out);
+
+    if (ret != static_cast<int>(size_out))
+        return -1;
 
     return 0;
 }
