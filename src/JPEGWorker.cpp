@@ -27,41 +27,60 @@ JPEGWorker::~JPEGWorker()
     LOG_DEBUG("JPEGWorker destroyed for JPEG channel index " << jpgChn);
 }
 
-extern "C" {
-#include "JPEG.Encryption.Core.h"
-}
-
 int JPEGWorker::save_jpeg_stream(int fd, IMPEncoderStream *stream)
 {
+    printf("PRIVAJPEG: start save_jpeg_stream\n");
+
     int nr_pack = stream->packCount;
+    printf("PRIVAJPEG: packCount=%d\n", nr_pack);
 
     size_t total_size = 0;
     for (int i = 0; i < nr_pack; i++)
         total_size += stream->pack[i].length;
 
+    printf("PRIVAJPEG: total_size=%zu\n", total_size);
+
     unsigned char *jpeg_buffer = (unsigned char *)malloc(total_size);
-    if (!jpeg_buffer) return -1;
+    if (!jpeg_buffer)
+    {
+        printf("PRIVAJPEG: malloc failed\n");
+        return -1;
+    }
 
     size_t offset = 0;
+
     for (int i = 0; i < nr_pack; i++)
     {
+        printf("PRIVAJPEG: pack %d len=%u\n", i, stream->pack[i].length);
+
 #if defined(PLATFORM_T31) || defined(PLATFORM_T40) || defined(PLATFORM_T41) || defined(PLATFORM_C100)
         IMPEncoderPack *pack = &stream->pack[i];
-        if (!pack->length) continue;
+        if (!pack->length)
+        {
+            printf("PRIVAJPEG: pack %d empty\n", i);
+            continue;
+        }
 
         uint32_t remSize = stream->streamSize - pack->offset;
-        void *data_ptr = (void *) ((char *) stream->virAddr +
-                        ((remSize < pack->length) ? 0 : pack->offset));
+
+        printf("PRIVAJPEG: pack %d offset=%u remSize=%u\n",
+               i, pack->offset, remSize);
+
+        void *data_ptr = (void *)((char *)stream->virAddr +
+                          ((remSize < pack->length) ? 0 : pack->offset));
         size_t data_len = (remSize < pack->length) ? remSize : pack->length;
 
         memcpy(jpeg_buffer + offset, data_ptr, data_len);
+        printf("PRIVAJPEG: memcpy main part len=%zu new_offset=%zu\n", data_len, offset + data_len);
         offset += data_len;
 
         if (remSize && pack->length > remSize)
         {
-            void *ptr2 = (void *) ((char *) stream->virAddr);
+            void *ptr2 = (void *)((char *)stream->virAddr);
             size_t len2 = pack->length - remSize;
+
             memcpy(jpeg_buffer + offset, ptr2, len2);
+            printf("PRIVAJPEG: memcpy wrap len=%zu new_offset=%zu\n", len2, offset + len2);
             offset += len2;
         }
 
@@ -69,10 +88,14 @@ int JPEGWorker::save_jpeg_stream(int fd, IMPEncoderStream *stream)
    || defined(PLATFORM_T23) || defined(PLATFORM_T30)
         void *data_ptr = reinterpret_cast<void *>(stream->pack[i].virAddr);
         size_t data_len = stream->pack[i].length;
+
         memcpy(jpeg_buffer + offset, data_ptr, data_len);
+        printf("PRIVAJPEG: memcpy simple len=%zu new_offset=%zu\n", data_len, offset + data_len);
         offset += data_len;
 #endif
     }
+
+    printf("PRIVAJPEG: calling jpeg_process_buffer size=%zu\n", offset);
 
     unsigned char *buffer_out = nullptr;
     uint32_t size_out = 0;
@@ -83,7 +106,7 @@ int JPEGWorker::save_jpeg_stream(int fd, IMPEncoderStream *stream)
 
     int ret_crypto = jpeg_process_buffer(
         jpeg_buffer,
-        static_cast<uint32_t>(total_size),
+        (uint32_t)total_size,
         &buffer_out,
         &size_out,
         password,
@@ -93,17 +116,28 @@ int JPEGWorker::save_jpeg_stream(int fd, IMPEncoderStream *stream)
         0
     );
 
+    printf("PRIVAJPEG: crypto result ret=%d size_out=%u\n", ret_crypto, size_out);
+
     free(jpeg_buffer);
 
     if (ret_crypto != 0 || !buffer_out)
+    {
+        printf("PRIVAJPEG: crypto failed\n");
         return -1;
+    }
 
     int ret = write(fd, buffer_out, size_out);
+    printf("PRIVAJPEG: write ret=%d expected=%u\n", ret, size_out);
+
     free(buffer_out);
 
-    if (ret != static_cast<int>(size_out))
+    if (ret != (int)size_out)
+    {
+        printf("PRIVAJPEG: write failed\n");
         return -1;
+    }
 
+    printf("PRIVAJPEG: done\n");
     return 0;
 }
 
