@@ -104,7 +104,7 @@
     "audio_enabled": true,
     "bitrate": 3000,
     "buffers": 1,
-    "enabled": true,
+    "enabled": false,
     "format": "H264",
     "fps": 20,
     "gop": 10,
@@ -161,7 +161,7 @@
     "audio_enabled": true,
     "bitrate": 1000,
     "buffers": 1,
-    "enabled": true,
+    "enabled": false,
     "format": "H264",
     "fps": 20,
     "gop": 10,
@@ -216,10 +216,10 @@
   "stream2": {
     "enabled": true,
     "jpeg_channel": 0,
-    "jpeg_idle_fps": 1,
+    "jpeg_idle_fps": 10,
     "jpeg_path": "/tmp/snapshot.jpg",
     "jpeg_quality": 75,
-    "jpeg_refresh": 1000
+    "jpeg_refresh": 100
   },
   "websocket": {
     "enabled": true,
